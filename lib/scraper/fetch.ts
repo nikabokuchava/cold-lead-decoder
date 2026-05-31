@@ -103,6 +103,24 @@ function isBlockedIPv6(ip: string): boolean {
   // fc00::/7 — first 7 bits of first byte equal 0b1111110
   const firstByte = (groups[0] >> 8) & 0xff;
   if ((firstByte & 0xfe) === 0xfc) return true;
+  // fe80::/10 (link-local)
+  if ((groups[0] & 0xffc0) === 0xfe80) return true;
+  // ff00::/8 (multicast)
+  if ((groups[0] >> 8) === 0xff) return true;
+  // :: (unspecified, all-zeros)
+  if (groups.every((g) => g === 0)) return true;
+  // IPv4-mapped (::ffff:x.x.x.x in pure hex) -> validate the embedded IPv4
+  if (
+    groups[0] === 0 &&
+    groups[1] === 0 &&
+    groups[2] === 0 &&
+    groups[3] === 0 &&
+    groups[4] === 0 &&
+    groups[5] === 0xffff
+  ) {
+    const v4 = `${groups[6] >> 8}.${groups[6] & 0xff}.${groups[7] >> 8}.${groups[7] & 0xff}`;
+    if (isBlockedIPv4(v4)) return true;
+  }
   return false;
 }
 

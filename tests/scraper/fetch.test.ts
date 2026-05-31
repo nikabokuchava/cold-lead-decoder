@@ -65,6 +65,11 @@ describe("isBlockedIp — IPv6 ranges", () => {
     ["fc00::1", "IPv6 ULA fc00::/7 lower"],
     ["fd00::1", "IPv6 ULA fc00::/7 (fd-half)"],
     ["fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", "IPv6 ULA upper"],
+    ["fe80::1", "IPv6 link-local fe80::/10"],
+    ["ff02::1", "IPv6 multicast ff00::/8"],
+    ["::", "IPv6 unspecified"],
+    ["::ffff:7f00:1", "IPv4-mapped loopback ::ffff:127.0.0.1"],
+    ["::ffff:c0a8:101", "IPv4-mapped private ::ffff:192.168.1.1"],
   ])("blocks %s — %s", (ip) => {
     expect(isBlockedIp(ip)).toBe(true);
   });
@@ -73,6 +78,7 @@ describe("isBlockedIp — IPv6 ranges", () => {
     ["2606:4700:4700::1111", "Cloudflare public IPv6"],
     ["2001:4860:4860::8888", "Google public IPv6"],
     ["fe00::1", "just below fc00::/7"],
+    ["2001:db8::1", "documentation prefix (not in a blocked range)"],
   ])("allows %s — %s", (ip) => {
     expect(isBlockedIp(ip)).toBe(false);
   });

@@ -80,6 +80,11 @@ export async function decodePipeline(
       degraded: scrape.degraded,
     });
 
+    // Keep only source_pages we actually fetched (model may echo/invent URLs).
+    const allowedPages = new Set(scrape.pages);
+    const keptPages = card.source_pages.filter((p) => allowedPages.has(p));
+    card.source_pages = keptPages.length > 0 ? keptPages : scrape.pages;
+
     let notes = card.confidence_notes;
     if (card.degraded && !(notes ?? "").toLowerCase().includes("limited")) {
       notes = mergeNotes(notes, DEGRADED_NOTE);

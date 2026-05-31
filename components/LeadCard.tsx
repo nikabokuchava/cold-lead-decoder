@@ -83,9 +83,11 @@ function SourceLinks({ urls }: { urls: readonly string[] }): JSX.Element | null 
   for (const u of urls) {
     let host: string;
     try {
-      host = new URL(u).hostname;
+      const parsed = new URL(u);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") continue;
+      host = parsed.hostname;
     } catch {
-      host = u;
+      continue;
     }
     if (seen.has(host)) continue;
     seen.add(host);
