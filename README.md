@@ -24,7 +24,7 @@ The pipeline accepts an arbitrary, user-supplied domain and forwards parts of a 
 
 ## Evaluation Methodology
 
-- **Automated Testing** — **145 unit and integration tests** passing in Vitest, spanning the schema, the SSRF + body-cap fetch layer, the Readability/cheerio extractor, the DeepSeek wrapper with backoff, the validate-and-repair loop, the rate limiter, the LRU cache, the pipeline orchestrator, the API route, and the React components. Run with `npm test`.
+- **Automated Testing** — **151 unit and integration tests** passing in Vitest, spanning the schema, the SSRF + body-cap fetch layer, the Readability/cheerio extractor, the DeepSeek wrapper with backoff, the validate-and-repair loop, the rate limiter, the LRU cache, the pipeline orchestrator, the API route, and the React components. Run with `npm test`.
 
 - **Qualitative Eval** — a property-based eval harness at `tests/eval/harness.test.ts` runs DeepSeek against five hand-built fixture types in `tests/eval/golden_set.json`:
 
@@ -37,6 +37,10 @@ The pipeline accepts an arbitrary, user-supplied domain and forwards parts of a 
   | `strong_signal`| explicit recent launch — opener must reference the trigger keyword            |
 
   Each fixture asserts: Zod-shape validity, a non-empty `evidence.opener_basis`, exactly 2 `follow_up_angles`, banned-phrase compliance on the opener, and (for `strong_signal`) a regex match on the trigger keyword. The eval suite is gated on `DEEPSEEK_API_KEY` and is skipped automatically when the key is absent.
+
+  A committed run of this harness is recorded in [`docs/eval-results.md`](./docs/eval-results.md).
+
+- **Operational Metrics** — a live `/eval` dashboard ([coldl.vercel.app/eval](https://coldl.vercel.app/eval)) is backed by Neon Postgres: a nightly cron decodes 20 domains and writes one row per run, and the page surfaces success rate, p50/p95 latency, and run count. These are operational health metrics (does the pipeline run, and how fast), not accuracy evals.
 
 ## Architecture Decisions
 
