@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
@@ -16,7 +17,7 @@
     "cheerio": "^1.2.0",
     "jsdom": "20.0.3",
     "lru-cache": "^11.5.0",
-    "next": "^14.2.0",
+    "next": "^15.5.20",
     "openai": "^6.38.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -34,9 +35,13 @@
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.9"
+    "vitest": "^3.2.7"
   },
   "overrides": {
-    "jsdom": "20.0.3"
+    "jsdom": "20.0.3",
+    "form-data": "4.0.6",
+    "undici": "7.28.0",
+    "vite": "^6.4.3",
+    "postcss": "^8.5.15"
   }
 }

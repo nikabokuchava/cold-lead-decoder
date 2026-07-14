@@ -14,11 +14,11 @@ Cold Lead Decoder is a single-route service for B2B outbound research. A user pa
 
 The pipeline accepts an arbitrary, user-supplied domain and forwards parts of a third-party HTML response to an LLM. Defense-in-depth controls live at every layer:
 
-- **SSRF Protection** — `safeFetch` resolves every host with both `dns.resolve4` and `dns.resolve6` and rejects the request if *any* resolved address falls in a private, loopback, link-local, RFC-6598 CGNAT, or ULA (`fc00::/7`) range. Redirects are followed manually with `redirect: "manual"`, and the full DNS check is re-applied on every hop — a DNS-rebinding attempt against a 30x target is caught before its body is read. Source: `lib/scraper/fetch.ts`.
+- **SSRF Protection** — `safeFetch` resolves every host with both `dns.resolve4` and `dns.resolve6` and rejects the request if *any* resolved address falls in a private, loopback, link-local, RFC-6598 CGNAT, or ULA (`fc00::/7`) range; IP literals in the URL are checked directly against the same ranges. Redirects are followed manually with `redirect: "manual"`, and the full DNS + IP-literal check is re-applied on every hop, so a redirect pointed at a blocked address is rejected before it's followed. **This is not complete protection against DNS-rebinding attacks**: the validation lookup and the actual `fetch()` connection are two separate DNS resolutions, so a record with a very short TTL that changes between them could still let a connection reach a private address after the check passed. Source: `lib/scraper/fetch.ts`.
 
 - **Prompt Injection** — scraped page text is wrapped in `<website_content>…</website_content>` tags inside the user message, and `<` / `>` inside the payload are entity-escaped (`escapeXmlTags` in `lib/llm/utils.ts`) so an attacker cannot close the tag from inside the page. The system prompt has an explicit security clause instructing the model to treat everything inside the tags as data, never as instructions, and to ignore role declarations or admin overrides embedded in the page. Source: `lib/llm/repair.ts`.
 
-- **Rate Limiting** — an in-memory **sliding-window** limiter keyed on client IP, defaulting to 5 requests per 60 seconds (overridable via `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS`). Buckets are cleaned via a **lazy sweep** that runs at most once per window, so memory usage stays bounded without a background timer. Source: `lib/security/rateLimiter.ts`.
+- **Rate Limiting** — an in-memory **sliding-window** limiter keyed on client IP, defaulting to 5 requests per 60 seconds (overridable via `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS`). Buckets are cleaned via a **lazy sweep** that runs at most once per window, so memory usage stays bounded without a background timer. **This is a process-local, best-effort limiter, not distributed rate limiting**: state lives in a plain `Map` inside a single function instance, resets on every cold start, and is not shared across concurrent Vercel instances — the effective global limit scales with however many instances are warm, not with the configured value. Adequate for a demo; a production deployment would need a shared store (e.g. Redis/Upstash). Source: `lib/security/rateLimiter.ts`.
 
 - **Cost Protection** — every outbound fetch has an 8-second timeout, follows at most 3 redirects, and is capped at **1,500,000 bytes (~1.5 MB)** of body — enforced both via the `content-length` header and a streaming guard that aborts mid-read. Combined homepage + `/about` text is truncated to **12,000 characters** before reaching the LLM (`TEXT_BUDGET` in `lib/scraper/extract.ts`). A per-domain LRU output cache (`lru-cache`, max 500 entries, 24-hour TTL) eliminates redundant DeepSeek calls. Sources: `lib/scraper/fetch.ts`, `lib/scraper/extract.ts`, `lib/cache/domainCache.ts`.
 
@@ -44,7 +44,7 @@ The pipeline accepts an arbitrary, user-supplied domain and forwards parts of a 
 
 ## Architecture Decisions
 
-The full set of decisions — framework, runtime, scraping strategy, LLM contract, schema authority, SSRF policy, persistence, failure UX, UI dependencies — is recorded in [`CLAUDE.md`](./CLAUDE.md#architecture-decision-records) as ADR-001 through ADR-009.
+The full set of decisions — framework, runtime, scraping strategy, LLM contract, schema authority, SSRF policy, persistence, failure UX, UI dependencies — is recorded in [`docs/architecture-decisions.md`](./docs/architecture-decisions.md) as ADR-001 through ADR-009.
 
 The linear pipeline:
 
@@ -56,22 +56,28 @@ The linear pipeline:
 
 ## Tech Stack
 
-- **Next.js 14** (App Router, Node runtime)
+- **Next.js 15.5.20** (App Router, Node runtime)
 - **TypeScript**
 - **DeepSeek `deepseek-chat`** (intentionally used over `deepseek-v4-flash` for JSON mode reliability; v4-flash can be re-evaluated via A/B eval harness when needed) via the OpenAI SDK (`response_format: { type: "json_object" }`, thinking disabled, exponential backoff on 429/500/503)
 - **Zod** — single source of truth for the API and UI contract
 - **`@mozilla/readability`** + `jsdom`, with `cheerio` as fallback
-- **`lru-cache`** — 24-hour per-domain output cache
-- **Neon (Postgres)** — eval metrics persistence via `@neondatabase/serverless`
-- **Vitest** + React Testing Library
+- **`lru-cache`** — in-memory, 24-hour per-domain output cache (not Vercel KV — process-local, feature-flagged via `ENABLE_CACHE`)
+- **Neon (Postgres)** — used exclusively for eval-run metrics persistence via `@neondatabase/serverless`; no user data, sessions, or app state ever touch a database
+- **Vitest 3.2.7** + React Testing Library
 
 ## Setup
 
 Requirements: Node.js 20+ and a DeepSeek API key.
 
 ```bash
-npm install
-echo "DEEPSEEK_API_KEY=sk-..." > .env.local
+npm ci
+cp .env.example .env.local
+# Windows PowerShell: Copy-Item .env.example .env.local
+```
+
+Edit `.env.local` and set `DEEPSEEK_API_KEY` (get one at https://platform.deepseek.com/api_keys).
+
+```bash
 npm run dev
 ```
 

@@ -3,9 +3,11 @@ node_modules/
 .vercel/
 .env
 .env.*
+!.env.example
 .gitnexus/
 .claude/
 
 .vercel
 tsconfig.tsbuildinfo
 scripts/dirty-dozen.results.json
+docs/plans/

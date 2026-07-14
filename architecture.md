@@ -8,6 +8,12 @@ recommended_stack: Next.js 14 (App Router, TS) + one Node route handler + DeepSe
 
 > **Change note (2026-05-19): LLM provider switched from Anthropic → DeepSeek.** It's one provider swap, but it has two non-cosmetic consequences baked into the sections below: (1) DeepSeek has **no strict tool/schema-enforced structured output** like Anthropic — you get `response_format: {type:"json_object"}` (valid JSON only, *not* schema-valid), so **Zod + the repair retry move from "recommended" to load-bearing and mandatory**; (2) DeepSeek throttles with **HTTP 429 under concurrency**, which is a real *live-demo* risk and adds a retry/backoff requirement + makes the optional cache a demo-warming tactic. Model: **`deepseek-chat`, thinking disabled** (intentionally used over `deepseek-v4-flash` for JSON mode reliability; v4-flash can be re-evaluated via A/B eval harness when needed). Everything else in this doc stands.
 
+> **Historical document.** This is the pre-implementation design brainstorm this v1 build was based on, kept for its reasoning trail — it is not a live spec. Where it disagrees with the shipped code, the code and [`docs/architecture-decisions.md`](./docs/architecture-decisions.md) are authoritative. Known drift since this was written:
+> - **SSRF guard (§4 step 2, §6):** shipped as `dns.promises.resolve4` / `resolve6`, not `dns.promises.lookup`; see ADR-006 for the DNS-rebinding caveat this implies.
+> - **Domain cache (§8, §12):** shipped as an in-process `lru-cache` (`lib/cache/domainCache.ts`), not Vercel KV.
+> - **Persistence (§1, §13):** a later decision (ADR-007) added Neon Postgres for eval-run metrics only. The "no database" framing below refers to user data, sessions, and history, which remain genuinely out of scope.
+> - **Framework version (§8, §14):** upgraded from Next.js 14 to Next.js 15.5.20 in a later security-driven dependency remediation — no maintained Next 14 patch cleared the applicable high-severity advisories; see ADR-001.
+
 # Cold Lead Decoder — MVP Architecture Brainstorm
 
 No code yet. This is the thinking pass. Opinionated, MVP-first, solo-builder-paced. The recurring theme: **strong contracts around fragile parts (scraping + LLM), nothing else.**

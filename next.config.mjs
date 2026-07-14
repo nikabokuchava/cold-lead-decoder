@@ -1,22 +1,20 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: [
-      'jsdom',
-      '@mozilla/readability',
-      'html-encoding-sniffer',
-      '@exodus/bytes',
-      'whatwg-encoding',
-      'parse5',
-      'tr46',
-      'webidl-conversions',
-      'w3c-xmlserializer',
-      'saxes',
-      'symbol-tree',
-      'nwsapi',
-      'cheerio',
-    ],
-  },
+  serverExternalPackages: [
+    'jsdom',
+    '@mozilla/readability',
+    'html-encoding-sniffer',
+    '@exodus/bytes',
+    'whatwg-encoding',
+    'parse5',
+    'tr46',
+    'webidl-conversions',
+    'w3c-xmlserializer',
+    'saxes',
+    'symbol-tree',
+    'nwsapi',
+    'cheerio',
+  ],
   webpack: (config, { isServer }) => {
     if (isServer) {
       const nodeExternals = [
