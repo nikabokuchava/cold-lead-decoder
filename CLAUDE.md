@@ -16,7 +16,7 @@
 ## Known limitations
 
 - **SSRF guard** resolves DNS and checks the resolved IP before connecting, but the validation lookup and the actual `fetch()` are two separate resolutions — a short-TTL DNS record could still enable a rebinding attack between them. See ADR-006.
-- **Rate limiter** is process-local (in-memory `Map`), not distributed — the effective limit scales with the number of warm instances, not the configured value.
+- **Rate limiter** is process-local (in-memory `Map`), not distributed — the effective limit scales with the number of warm instances, not the configured value. Memory is bounded by two explicit caps, not by the lazy sweep alone: at most `RATE_LIMIT_MAX` accepted timestamps per identifier (a blocked client's array never grows past this), and at most `RATE_LIMIT_MAX_BUCKETS` (default 10,000) active identifiers per process — sweeping stale buckets first, then denying a brand-new identifier fail-closed once the cap is reached without evicting anything already tracked. Client IP is taken from `x-vercel-forwarded-for` first, then the rightmost validated `x-forwarded-for` entry (never the leftmost, which is attacker-settable), then `x-real-ip`, then canonicalized so re-encoding the same IP can't mint a new bucket. Trusting these headers is a documented Vercel-platform assumption, not a runtime-verified one — outside Vercel's edge (local dev, another host, direct exposure) they're all attacker-controlled, and there is no dependable always-on signal (Vercel's `VERCEL` env var is only set when a project opts in) to gate that trust at runtime. This closes the leftmost-XFF-spoofing bucket-bypass on genuine Vercel traffic; it does **not** make the limiter distributed or production-grade on its own.
 
 ## Architecture Decision Records
 

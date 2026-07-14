@@ -52,7 +52,7 @@ const defaultResolver: Resolver = async (host) => {
 
 const defaultFetcher: Fetcher = (url, init) => fetch(url, init);
 
-function isIPv4Literal(s: string): boolean {
+export function isIPv4Literal(s: string): boolean {
   if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(s)) return false;
   return s.split(".").every((n) => {
     const v = Number(n);
@@ -73,26 +73,48 @@ function isBlockedIPv4(ip: string): boolean {
   return false;
 }
 
-function parseIPv6(ip: string): number[] | null {
+const HEX_GROUP = /^[0-9a-fA-F]{1,4}$/;
+
+// A trailing dotted-decimal segment (e.g. the "1.2.3.4" in "::ffff:1.2.3.4")
+// is a valid RFC 4291 IPv4-mapped/compatible suffix; expand it into the two
+// 16-bit hex groups it represents, or return null if it isn't a real IPv4.
+function expandTrailingIPv4(segments: string[]): string[] | null {
+  if (segments.length === 0) return segments;
+  const last = segments[segments.length - 1];
+  if (!last.includes(".")) return segments;
+  if (!isIPv4Literal(last)) return null;
+  const octets = last.split(".").map(Number);
+  const hi = ((octets[0] << 8) | octets[1]).toString(16);
+  const lo = ((octets[2] << 8) | octets[3]).toString(16);
+  return [...segments.slice(0, -1), hi, lo];
+}
+
+export function parseIPv6(ip: string): number[] | null {
   if (!ip.includes(":")) return null;
   if (ip.includes(":::")) return null;
   const doubleColonCount = (ip.match(/::/g) ?? []).length;
   if (doubleColonCount > 1) return null;
   let parts: string[];
   if (doubleColonCount === 0) {
-    parts = ip.split(":");
-    if (parts.length !== 8) return null;
+    const expanded = expandTrailingIPv4(ip.split(":"));
+    if (!expanded || expanded.length !== 8) return null;
+    parts = expanded;
   } else {
     const [headStr, tailStr] = ip.split("::");
     const head = headStr ? headStr.split(":") : [];
-    const tail = tailStr ? tailStr.split(":") : [];
+    const tail = expandTrailingIPv4(tailStr ? tailStr.split(":") : []);
+    if (!tail) return null;
     const fill = 8 - head.length - tail.length;
-    if (fill < 0) return null;
+    // "::" must replace at least one zero group (RFC 4291); fill === 0
+    // would mean it replaced nothing, which node:net.isIP also rejects.
+    if (fill <= 0) return null;
     parts = [...head, ...Array(fill).fill("0"), ...tail];
   }
-  const groups = parts.map((g) => parseInt(g, 16));
-  if (groups.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff)) return null;
-  return groups;
+  // Every group must be 1-4 hex digits and nothing else -- parseInt alone
+  // would silently truncate a group like "1zz" or "1garbageA" to a valid-
+  // looking number instead of rejecting it.
+  if (!parts.every((g) => HEX_GROUP.test(g))) return null;
+  return parts.map((g) => parseInt(g, 16));
 }
 
 function isBlockedIPv6(ip: string): boolean {

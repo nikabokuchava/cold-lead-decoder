@@ -1,7 +1,9 @@
+import { isIP } from "node:net";
 import { describe, expect, it, vi } from "vitest";
 import {
   assertSafeUrl,
   isBlockedIp,
+  parseIPv6,
   safeFetch,
   type Fetcher,
   type Resolver,
@@ -70,6 +72,8 @@ describe("isBlockedIp — IPv6 ranges", () => {
     ["::", "IPv6 unspecified"],
     ["::ffff:7f00:1", "IPv4-mapped loopback ::ffff:127.0.0.1"],
     ["::ffff:c0a8:101", "IPv4-mapped private ::ffff:192.168.1.1"],
+    ["::ffff:127.0.0.1", "IPv4-mapped loopback, dotted-decimal notation"],
+    ["::ffff:192.168.1.1", "IPv4-mapped private, dotted-decimal notation"],
   ])("blocks %s — %s", (ip) => {
     expect(isBlockedIp(ip)).toBe(true);
   });
@@ -79,8 +83,76 @@ describe("isBlockedIp — IPv6 ranges", () => {
     ["2001:4860:4860::8888", "Google public IPv6"],
     ["fe00::1", "just below fc00::/7"],
     ["2001:db8::1", "documentation prefix (not in a blocked range)"],
+    ["::ffff:8.8.8.8", "IPv4-mapped public IP, dotted-decimal notation"],
   ])("allows %s — %s", (ip) => {
     expect(isBlockedIp(ip)).toBe(false);
+  });
+
+  it.each([
+    ["1:2:3:4:5:6:7:1zz", "trailing non-hex characters must not be truncated to a valid group"],
+    ["1:2:3:4:5:6:7:1garbageA", "trailing garbage must not be truncated to a valid group"],
+    ["::ffff:999.999.999.999", "invalid octets in an IPv4-mapped suffix"],
+    ["::ffff:1.2.3", "incomplete IPv4-mapped suffix"],
+  ])("does not treat %s as a valid IPv6 address (%s)", (ip) => {
+    expect(parseIPv6(ip)).toBeNull();
+  });
+});
+
+describe("parseIPv6 — zero-length :: compression must be rejected", () => {
+  // RFC 4291: "::" MUST replace at least one group of zeros. A form that
+  // already spells out all 8 groups and then appends/prepends an empty
+  // "::" is not valid shorthand for anything — node:net.isIP agrees (0).
+  it.each([
+    ["1:2:3:4:5:6:7:8::", "all 8 groups spelled out plus a trailing zero-length ::"],
+    ["::1:2:3:4:5:6:7:8", "all 8 groups spelled out plus a leading zero-length ::"],
+  ])("rejects %s (%s)", (ip) => {
+    expect(parseIPv6(ip)).toBeNull();
+    expect(isIP(ip)).toBe(0);
+  });
+
+  it.each([
+    ["1:2:3:4:5:6:7::", [1, 2, 3, 4, 5, 6, 7, 0]],
+    ["::1:2:3:4:5:6:7", [0, 1, 2, 3, 4, 5, 6, 7]],
+    ["::", [0, 0, 0, 0, 0, 0, 0, 0]],
+    ["1::2", [1, 0, 0, 0, 0, 0, 0, 2]],
+  ])("still accepts the valid boundary case %s", (ip, expected) => {
+    expect(parseIPv6(ip)).toEqual(expected);
+    expect(isIP(ip)).toBe(6);
+  });
+
+  it.each([
+    "1:2:3:4:5:6:7:8",
+    "1:2:3:4:5:6:7::",
+    "::1:2:3:4:5:6:7",
+    "::",
+    "1::2",
+    "::1",
+    "1::",
+    "2001:db8::1",
+    "::ffff:1.2.3.4",
+    "fe80::1",
+  ])("agrees with node:net.isIP that %s is valid IPv6", (ip) => {
+    expect(isIP(ip)).toBe(6);
+    expect(parseIPv6(ip)).not.toBeNull();
+  });
+
+  it.each([
+    "1:2:3:4:5:6:7:8::",
+    "::1:2:3:4:5:6:7:8",
+    "1:2:3:4:5:6:7:8:9",
+    "1:2:3:4:5:6:7",
+    ":::",
+    "1:2:3::4:5:6:7:8",
+  ])("agrees with node:net.isIP that %s is invalid IPv6", (ip) => {
+    expect(isIP(ip)).toBe(0);
+    expect(parseIPv6(ip)).toBeNull();
+  });
+
+  it("existing IPv4-mapped IPv6 tests still pass with the fixed fill check", () => {
+    expect(parseIPv6("::ffff:127.0.0.1")).toEqual([0, 0, 0, 0, 0, 0xffff, 0x7f00, 1]);
+    expect(parseIPv6("::ffff:192.168.1.1")).toEqual([0, 0, 0, 0, 0, 0xffff, 0xc0a8, 0x101]);
+    expect(isBlockedIp("::ffff:127.0.0.1")).toBe(true);
+    expect(isBlockedIp("::ffff:8.8.8.8")).toBe(false);
   });
 });
 
