@@ -44,7 +44,7 @@ The pipeline accepts an arbitrary, user-supplied domain and forwards parts of a 
 
 ## Architecture Decisions
 
-The full set of decisions — framework, runtime, scraping strategy, LLM contract, schema authority, SSRF policy, persistence, failure UX, UI dependencies — is recorded in [`docs/architecture-decisions.md`](./docs/architecture-decisions.md) as ADR-001 through ADR-009.
+The full set of decisions — framework, runtime, scraping strategy, LLM contract, schema authority, SSRF policy, persistence, failure UX, UI dependencies, rate limiting — is recorded in [`docs/architecture-decisions.md`](./docs/architecture-decisions.md) as ADR-001 through ADR-010.
 
 The linear pipeline:
 
